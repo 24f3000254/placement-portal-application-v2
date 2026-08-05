@@ -4,6 +4,46 @@
 
 <h2 class="mb-4">Admin Dashboard</h2>
 
+<div class="row mb-4">
+
+<div class="col-md-3">
+<div class="card text-center">
+<div class="card-body">
+<h5>Students</h5>
+<h3>{{dashboard.students}}</h3>
+</div>
+</div>
+</div>
+
+<div class="col-md-3">
+<div class="card text-center">
+<div class="card-body">
+<h5>Companies</h5>
+<h3>{{dashboard.companies}}</h3>
+</div>
+</div>
+</div>
+
+<div class="col-md-3">
+<div class="card text-center">
+<div class="card-body">
+<h5>Jobs</h5>
+<h3>{{dashboard.jobs}}</h3>
+</div>
+</div>
+</div>
+
+<div class="col-md-3">
+<div class="card text-center">
+<div class="card-body">
+<h5>Applications</h5>
+<h3>{{dashboard.applications}}</h3>
+</div>
+</div>
+</div>
+
+</div>
+
 <h4>Registered Companies</h4>
 
 <table class="table table-bordered">
@@ -75,68 +115,64 @@ Approve
 import {ref,onMounted} from "vue"
 import axios from "axios"
 
-const companies=ref([])
+const companies = ref([])
+
+const dashboard = ref({
+students:0,
+companies:0,
+jobs:0,
+applications:0
+})
+
+function loadDashboard(){
+axios.get(
+"http://127.0.0.1:5000/admin/dashboard",
+{
+headers:{
+Authorization:"Bearer "+localStorage.getItem("token")
+}})
+ 
+
+.then((res)=>{
+dashboard.value = res.data
+})
+}
 
 function loadCompanies(){
-
 axios.get(
-
 "http://127.0.0.1:5000/admin/companies",
-
 {
 
 headers:{
-
 Authorization:"Bearer "+localStorage.getItem("token")
-
 }
-
-}
-
-)
-
-.then((res)=>{
-
-companies.value=res.data
-
 })
 
+.then((res)=>{
+companies.value=res.data
+})
 }
 
 function approve(id){
-
 axios.put(
-
 "http://127.0.0.1:5000/admin/approve-company/"+id,
-
 {},
 
 {
-
 headers:{
-
 Authorization:"Bearer "+localStorage.getItem("token")
-
-}
-
-}
-
+}}
 )
 
 .then(()=>{
-
 alert("Company Approved")
-
 loadCompanies()
-
 })
-
 }
 
 onMounted(()=>{
-
+loadDashboard()
 loadCompanies()
-
 })
 
 </script>

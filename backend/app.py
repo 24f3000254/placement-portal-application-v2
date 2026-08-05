@@ -48,14 +48,17 @@ def home():
     return "Placement Portal API Running"
 
 
-@app.route("/student/register",methods=["POST"])
+@app.route("/student/register", methods=["POST"])
 def student_register():
-    data=request.json
-    user=User.query.filter_by(email=data["email"]).first()
-    if user:
-        return jsonify({"message":"Email already exists"})
 
-    new_user=User(
+    data = request.json
+
+    user = User.query.filter_by(email=data["email"]).first()
+
+    if user:
+        return jsonify({"message":"Email already exists"}),400
+
+    new_user = User(
         name=data["name"],
         email=data["email"],
         password=generate_password_hash(data["password"]),
@@ -65,20 +68,15 @@ def student_register():
     )
 
     db.session.add(new_user)
-    db.session.commit()
+    db.session.flush()
 
-
-    student=Student(
-        user_id=new_user.id,
-        education=data["education"],
-        branch=data["branch"],
-        year=data["year"],
-        cgpa=data["cgpa"],
-        skills=data["skills"]
+    student = Student(
+        user_id=new_user.id
     )
 
     db.session.add(student)
     db.session.commit()
+
     return jsonify({"message":"Student Registered Successfully"})
 
 @app.route("/company/register",methods=["POST"])
@@ -193,6 +191,60 @@ def admin_companies():
 
     return jsonify(data)
 
+@app.route("/admin/students")
+@check_role("admin")
+def admin_students():
+    students = Student.query.all()
+    data = []
+    for student in students:
+        user = User.query.get(student.user_id)
+
+        data.append({
+            "id": student.id,
+            "name": user.name,
+            "email": user.email,
+            "education": student.education,
+            "branch": student.branch,
+            "year": student.year,
+            "cgpa": student.cgpa
+        })
+    return jsonify(data)
+
+@app.route("/admin/jobs")
+@check_role("admin")
+def admin_jobs():
+    jobs = JobPosition.query.all()
+    data = []
+    for job in jobs:
+        company = Company.query.get(job.company_id)
+        data.append({
+            "id": job.id,
+            "job_title": job.job_title,
+            "location": job.location,
+            "salary": job.salary,
+            "company": company.company_name
+        })
+    return jsonify(data)
+
+@app.route("/admin/applications")
+@check_role("admin")
+def admin_applications():
+    applications = Application.query.all()
+    data = []
+
+    for application in applications:
+        student = Student.query.get(application.student_id)
+        user = User.query.get(student.user_id)
+        job = JobPosition.query.get(application.job_id)
+        company = Company.query.get(job.company_id)
+        data.append({
+            "id": application.id,
+            "student": user.name,
+            "company": company.company_name,
+            "job": job.job_title,
+            "status": application.status
+        })
+    return jsonify(data)
 
 @app.route("/admin/approve-company/<int:user_id>",methods=["PUT"])
 @check_role("admin")
@@ -206,6 +258,21 @@ def approve_company(user_id):
 
     return jsonify({
         "message":"Company Approved"
+    })
+
+@app.route("/admin/reject-company/<int:user_id>",methods=["PUT"])
+@check_role("admin")
+def reject_company(user_id):
+    user = User.query.get(user_id)
+
+    if user == None:
+        return jsonify({"message":"User Not Found"}),404
+
+    user.active = False
+    db.session.commit()
+
+    return jsonify({
+        "message":"Company Rejected"
     })
 
 @app.route("/student/dashboard")
@@ -251,6 +318,8 @@ def logout():
     return jsonify({
         "message":"Logout Successful"
     })
+
+
 
 if __name__ == "__main__":
     print("Placement Portal API Started")
