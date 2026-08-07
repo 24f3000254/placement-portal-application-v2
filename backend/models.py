@@ -46,6 +46,7 @@ class JobPosition(db.Model):
     salary = db.Column(db.Integer)
     experience = db.Column(db.String(100))
     skills_required = db.Column(db.String(200))
+    benefits = db.Column(db.Text)
     deadline = db.Column(db.String(50))
     status = db.Column(db.String(20), default="Pending")
     applications = db.relationship("Application", backref="job")
@@ -57,6 +58,7 @@ class Application(db.Model):
     job_id = db.Column(db.Integer, db.ForeignKey("job_position.id"))
     status = db.Column(db.String(30), default="Applied")
     application_date = db.Column(db.String(50))
+    interview_date = db.Column(db.String(50))
 
 
 class Placement(db.Model):

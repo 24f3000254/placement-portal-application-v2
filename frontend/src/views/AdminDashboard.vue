@@ -139,18 +139,30 @@ dashboard.value = res.data
 }
 
 function loadCompanies(){
-axios.get(
-"http://127.0.0.1:5000/admin/companies",
-{
 
-headers:{
-Authorization:"Bearer "+localStorage.getItem("token")
-}
-})
+    axios.get(
+        "http://127.0.0.1:5000/admin/companies",
+        {
+            headers:{
+                Authorization:"Bearer "+localStorage.getItem("token")
+            }
+        }
+    )
 
-.then((res)=>{
-companies.value=res.data
-})
+    .then((res)=>{
+
+        console.log(res.data)
+
+        companies.value = res.data
+
+    })
+
+    .catch((err)=>{
+
+        console.log(err.response)
+
+    })
+
 }
 
 function approve(id){

@@ -7,6 +7,7 @@ import CompanyRegister from "../views/CompanyRegister.vue"
 import AdminDashboard from "../views/AdminDashboard.vue"
 import StudentDashboard from "../views/StudentDashboard.vue"
 import CompanyDashboard from "../views/CompanyDashboard.vue"
+import CompanyApplicants from "../views/CompanyApplicants.vue"
 
 const routes = [
 
@@ -19,7 +20,14 @@ const routes = [
     path:"/login",
     component:Login
 },
-
+{
+    path:"/company/applicants/:id",
+    component:CompanyApplicants,
+    meta:{
+        auth:true,
+        role:"company"
+    }
+},
 {
     path:"/student-register",
     component:StudentRegister
