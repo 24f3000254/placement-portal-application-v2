@@ -109,20 +109,28 @@
                     <td>{{ job.title }}</td>
                     <td>{{ job.salary }}</td>
                     <td>{{ job.status }}</td>
-                    <td><router-link
-                    :to="'/company/applicants/'+job.id"
-                    class="btn btn-primary btn-sm">
-                    Applicants
-                    </router-link></td>
+
+<td>
+    <button
+    v-if="job.status == 'Active'"
+    class="btn btn-danger btn-sm me-1"
+    @click="changeJobStatus(job.id,'Inactive')">Deactivate</button>
+
+    <button
+    v-if="job.status == 'Inactive'"
+    class="btn btn-success btn-sm me-1"
+    @click="changeJobStatus(job.id,'Active')">Activate</button>
+
+    <router-link
+    :to="'/company/applicants/'+job.id"
+    class="btn btn-primary btn-sm">Applicants</router-link>
+
+</td>
 
                 </tr>
-
             </tbody>
-
         </table>
-
     </div>
-
 </div>
 
 </template>
@@ -214,6 +222,31 @@ function createJob(){
     })
 
 }
+
+
+function changeJobStatus(id,status){
+    axios.put(
+        "http://127.0.0.1:5000/company/job/"+id+"/status",
+        {
+            status:status
+        },
+        {
+            headers:{
+                Authorization:"Bearer "+localStorage.getItem("token")
+            }
+        }
+    )
+
+    .then(()=>{
+        alert("Job status updated")
+        loadDashboard()
+        loadJobs()
+    })
+    .catch((err)=>{
+        alert(err.response.data.message)
+    })
+}
+
 
 onMounted(()=>{
 

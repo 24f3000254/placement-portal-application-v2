@@ -86,6 +86,33 @@ Applied
 <h4>My Applications</h4>
 
 <table class="table table-bordered">
+<thead>
+<tr>
+    <th>Company</th>
+    <th>Job</th>
+    <th>Status</th>
+    <th>Applied On</th>
+    <th>Interview</th>
+</tr>
+</thead>
+<tbody>
+<tr
+v-for="app in applications"
+:key="app.id">
+<td>{{ app.company }}</td>
+<td>{{ app.job }}</td>
+<td>{{ app.status }}</td>
+<td>{{ app.application_date }}</td>
+<td>{{ app.interview_date }}</td>
+</tr>
+</tbody>
+</table>
+
+<hr>
+
+<h4>Placement History</h4>
+
+<table class="table table-bordered">
 
 <thead>
 
@@ -95,11 +122,11 @@ Applied
 
 <th>Job</th>
 
+<th>Salary</th>
+
+<th>Joining Date</th>
+
 <th>Status</th>
-
-<th>Applied On</th>
-
-<th>Interview</th>
 
 </tr>
 
@@ -108,163 +135,111 @@ Applied
 <tbody>
 
 <tr
-v-for="app in applications"
-:key="app.id">
-
-<td>{{ app.company }}</td>
-
-<td>{{ app.job }}</td>
-
-<td>{{ app.status }}</td>
-
-<td>{{ app.application_date }}</td>
-
-<td>{{ app.interview_date }}</td>
-
+v-for="placement in placements"
+:key="placement.id">
+<td>{{ placement.company }}</td>
+<td>{{ placement.job }}</td>
+<td>{{ placement.salary }}</td>
+<td>{{ placement.joining_date }}</td>
+<td>
+<span class="badge bg-success">
+{{ placement.status }}
+</span>
+</td>
 </tr>
-
 </tbody>
-
 </table>
-
 </div>
 
 </template>
 
 <script setup>
-
 import axios from "axios"
-
 import {ref,onMounted} from "vue"
-
 import {useRouter} from "vue-router"
-
 const router=useRouter()
-
 const jobs=ref([])
-
 const applications=ref([])
+const placements=ref([])
+
 
 function loadJobs(){
-
 axios.get(
-
 "http://127.0.0.1:5000/student/jobs",
-
 {
-
 headers:{
-
 Authorization:"Bearer "+localStorage.getItem("token")
-
-}
-
-}
-
-)
+}})
 
 .then(res=>{
-
-jobs.value=res.data
-
-})
-
+jobs.value=res.data})
 }
+
+
 
 function loadApplications(){
-
 axios.get(
-
 "http://127.0.0.1:5000/student/applications",
-
 {
-
 headers:{
-
 Authorization:"Bearer "+localStorage.getItem("token")
-
-}
-
-}
-
-)
+}})
 
 .then(res=>{
-
 applications.value=res.data
-
 })
-
 }
+
+
+function loadPlacements(){
+axios.get(
+"http://127.0.0.1:5000/student/placements",
+{
+headers:{
+Authorization:"Bearer "+localStorage.getItem("token")}})
+.then(res=>{
+placements.value=res.data
+})
+}
+
 
 function applyJob(id){
-
 axios.post(
-
 "http://127.0.0.1:5000/student/apply/"+id,
-
 {},
-
 {
-
 headers:{
-
 Authorization:"Bearer "+localStorage.getItem("token")
-
-}
-
-}
-
-)
+}})
 
 .then(()=>{
-
 alert("Application Submitted")
-
 loadJobs()
-
 loadApplications()
-
 })
-
 }
+
+
 
 function logout(){
-
 axios.post(
-
 "http://127.0.0.1:5000/logout",
-
 {},
-
 {
-
 headers:{
-
-Authorization:"Bearer "+localStorage.getItem("token")
-
-}
-
-}
-
-)
+Authorization:"Bearer "+localStorage.getItem("token")}})
 
 .then(()=>{
-
 localStorage.clear()
-
 router.push("/login")
-
 })
-
 }
 
+
 onMounted(()=>{
-
 loadJobs()
-
 loadApplications()
-
+loadPlacements()
 })
 
 </script>

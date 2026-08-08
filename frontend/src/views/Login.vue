@@ -100,7 +100,6 @@ password:password.value
 
 .then((res)=>{
 
-console.log(res.data)
 
 localStorage.setItem("token",res.data.token)
 localStorage.setItem("role",res.data.role)
