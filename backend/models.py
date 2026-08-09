@@ -37,7 +37,6 @@ class Company(db.Model):
     jobs = db.relationship("JobPosition", backref="company")
 
 
-
 class JobPosition(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     company_id = db.Column(db.Integer, db.ForeignKey("company.id"))
@@ -59,6 +58,7 @@ class Application(db.Model):
     status = db.Column(db.String(30), default="Applied")
     application_date = db.Column(db.String(50))
     interview_date = db.Column(db.String(50))
+    feedback = db.Column(db.Text)
 
 
 class Placement(db.Model):

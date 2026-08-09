@@ -1,10 +1,8 @@
-from flask import Flask
+from flask import Flask, send_file
+from io import BytesIO
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
-from flask_jwt_extended import jwt_required
-from flask_jwt_extended import get_jwt
-from flask_jwt_extended import get_jwt_identity
 from models import Company, JobPosition, Application
 from datetime import datetime
 
@@ -12,12 +10,16 @@ app = Flask(__name__)
 
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///placement.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["JWT_SECRET_KEY"] = "abc123"
+app.config["JWT_SECRET_KEY"] = "placement_portal_secret_key_2026_harsh_123456"
 from extensions import db, jwt
 db.init_app(app)
 jwt.init_app(app)
 
-
+from flask_jwt_extended import JWTManager
+from flask_jwt_extended import jwt_required
+from flask_jwt_extended import get_jwt
+from flask_jwt_extended import get_jwt_identity
+from flask_jwt_extended import create_access_token
 
 
 
@@ -38,25 +40,13 @@ def expired_token_callback(jwt_header, jwt_payload):
     print("TOKEN EXPIRED")
     return jsonify({"message": "Token expired"}), 401
 
-
-
-
-
 CORS(app)
-
 
 from models import *
 from werkzeug.security import generate_password_hash
 from werkzeug.security import check_password_hash
-
 from flask import request
 from flask import jsonify
-
-from flask_jwt_extended import create_access_token
-from flask_jwt_extended import jwt_required
-from flask_jwt_extended import get_jwt_identity
-from flask_jwt_extended import get_jwt
-
 from datetime import timedelta
 
 def check_role(role_name):
@@ -110,28 +100,33 @@ def student_register():
 @app.route("/student/jobs", methods=["GET"])
 @jwt_required()
 def student_jobs():
-
-    user_id = int (get_jwt_identity())
-
+    user_id = int(get_jwt_identity())
     user = User.query.get(user_id)
-
     if user.role != "student":
         return jsonify({"message":"Access denied"}),403
-
-    jobs = JobPosition.query.filter_by(status="Active").all()
-
-    data = []
-
     student = Student.query.filter_by(user_id=user.id).first()
+    search = request.args.get("search","")
+    jobs = JobPosition.query.filter_by(status="Active").all()
+    data = []
 
     for job in jobs:
         company = Company.query.get(job.company_id)
+        text = (
+            job.title + " " +
+            job.skills_required + " " +
+            company.company_name
+        ).lower()
+
+        if search.lower() not in text:
+            continue
+
         application = Application.query.filter_by(
             student_id=student.id,
             job_id=job.id
         ).first()
         applied = False
         status = ""
+
         if application:
             applied = True
             status = application.status
@@ -139,15 +134,17 @@ def student_jobs():
         data.append({
             "id":job.id,
             "title":job.title,
+            "description":job.description,
             "company":company.company_name,
             "salary":job.salary,
             "experience":job.experience,
             "skills_required":job.skills_required,
+            "benefits":job.benefits,
             "deadline":job.deadline,
+            "status":job.status,
             "applied":applied,
-            "status":status
+            "application_status":status
         })
-
     return jsonify(data)
 
 @app.route("/student/apply/<int:job_id>", methods=["POST"])
@@ -155,13 +152,18 @@ def student_jobs():
 def apply_job(job_id):
     user_id = int(get_jwt_identity())
     user = User.query.get(user_id)
-
     if user.role != "student":
         return jsonify({"message":"Access denied"}),403
+
     student = Student.query.filter_by(user_id=user.id).first()
     job = JobPosition.query.get(job_id)
     if job is None:
         return jsonify({"message":"Job not found"}),404
+
+    if job.status != "Active":
+        return jsonify({
+            "message": "This job is not approved or active"
+        }), 400
 
     check = Application.query.filter_by(
         student_id=student.id,
@@ -180,6 +182,7 @@ def apply_job(job_id):
 
     db.session.add(application)
     db.session.commit()
+
     return jsonify({
         "message":"Application Submitted"
     }),201
@@ -191,24 +194,33 @@ def my_applications():
     user = User.query.get(user_id)
 
     if user.role != "student":
-        return jsonify({"message":"Access denied"}),403
+        return jsonify({"message": "Access denied"}), 403
 
     student = Student.query.filter_by(user_id=user.id).first()
-    applications = Application.query.filter_by(student_id=student.id).all()
+    applications = Application.query.filter_by(
+        student_id=student.id
+    ).all()
+
     data = []
 
     for application in applications:
         job = JobPosition.query.get(application.job_id)
-        company = Company.query.get(job.company_id)
+        if job is None:
+            continue
 
+        company = Company.query.get(job.company_id)
         data.append({
-            "id":application.id,
-            "job":job.title,
-            "company":company.company_name,
-            "status":application.status,
-            "application_date":application.application_date,
-            "interview_date":application.interview_date
+            "id": application.id,
+            "job_id": job.id,
+            "job": job.title,
+            "company": company.company_name,
+            "salary": job.salary,
+            "status": application.status,
+            "application_date": application.application_date,
+            "interview_date": application.interview_date,
+            "feedback": application.feedback
         })
+
     return jsonify(data)
 
 
@@ -237,8 +249,167 @@ def student_placements():
             "joining_date": placement.joining_date,
             "status": "Placed"
         })
-
     return jsonify(data)
+
+@app.route("/student/placement/<int:placement_id>/download", methods=["GET"])
+@jwt_required()
+def download_placement(placement_id):
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+
+    if user.role != "student":
+        return jsonify({"message":"Access denied"}),403
+
+    student = Student.query.filter_by(user_id=user.id).first()
+    placement = Placement.query.filter_by(
+        id=placement_id,
+        student_id=student.id
+    ).first()
+
+    if placement is None:
+        return jsonify({
+            "message":"Placement not found"
+        }),404
+
+    company = Company.query.get(placement.company_id)
+    job = JobPosition.query.get(placement.job_id)
+
+    text = "PLACEMENT CONFIRMATION\n\n"
+    text += "Student Name: " + user.name + "\n"
+    text += "Student Email: " + user.email + "\n"
+    text += "Company: " + company.company_name + "\n"
+    text += "Job Position: " + job.title + "\n"
+    text += "Salary Package: " + str(placement.salary) + "\n"
+    text += "Joining Date: " + str(placement.joining_date) + "\n"
+    text += "Status: Placed\n"
+
+    file_data = BytesIO(text.encode("utf-8"))
+
+    return send_file(
+        file_data,
+        as_attachment=True,
+        download_name="placement_confirmation.txt",
+        mimetype="text/plain"
+    )
+
+@app.route("/student/profile", methods=["GET"])
+@jwt_required()
+def student_profile():
+
+    user_id = int(get_jwt_identity())
+
+    user = User.query.get(user_id)
+
+    if user.role != "student":
+        return jsonify({"message":"Access denied"}),403
+
+    student = Student.query.filter_by(user_id=user.id).first()
+
+    return jsonify({
+        "name":user.name,
+        "email":user.email,
+        "education":student.education,
+        "branch":student.branch,
+        "year":student.year,
+        "cgpa":student.cgpa,
+        "skills":student.skills,
+        "experience":student.experience,
+        "resume":student.resume
+    })
+
+
+@app.route("/student/profile", methods=["PUT"])
+@jwt_required()
+def update_student_profile():
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    if user.role != "student":
+        return jsonify({"message":"Access denied"}),403
+
+    student = Student.query.filter_by(user_id=user.id).first()
+    data = request.get_json()
+    user.name = data.get("name",user.name)
+
+    student.education = data.get(
+        "education",
+        student.education
+    )
+
+    student.branch = data.get(
+        "branch",
+        student.branch
+    )
+
+    student.year = data.get(
+        "year",
+        student.year
+    )
+
+    student.cgpa = data.get(
+        "cgpa",
+        student.cgpa
+    )
+
+    student.skills = data.get(
+        "skills",
+        student.skills
+    )
+
+    student.experience = data.get(
+        "experience",
+        student.experience
+    )
+    db.session.commit()
+    return jsonify({
+        "message":"Profile Updated"
+    })
+
+
+@app.route("/student/resume", methods=["POST"])
+@jwt_required()
+def upload_resume():
+
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+
+    if user.role != "student":
+        return jsonify({
+            "message":"Access denied"
+        }),403
+
+    student = Student.query.filter_by(
+        user_id=user.id
+    ).first()
+
+    if "resume" not in request.files:
+        return jsonify({
+            "message":"Resume file is required"
+        }),400
+
+    file = request.files["resume"]
+
+    if file.filename == "":
+        return jsonify({
+            "message":"Select a resume"
+        }),400
+
+    if not file.filename.lower().endswith(".pdf"):
+        return jsonify({
+            "message":"Only PDF files are allowed"
+        }),400
+
+    filename = "student_" + str(student.id) + ".pdf"
+
+    file.save("resumes/" + filename)
+
+    student.resume = filename
+
+    db.session.commit()
+
+    return jsonify({
+        "message":"Resume uploaded successfully",
+        "resume":filename
+    })
 
 
 @app.route("/company/register",methods=["POST"])
@@ -324,6 +495,11 @@ def create_company_job():
 
     company = Company.query.filter_by(user_id=user.id).first()
 
+    if user.approved == False:
+        return jsonify({
+            "message":"Company is not approved by admin"
+        }),403
+
     if company is None:
         return jsonify({"message": "Company not found"}), 404
     data = request.get_json()
@@ -336,7 +512,7 @@ def create_company_job():
         skills_required=data["skills_required"],
         benefits=data["benefits"],
         deadline=data["deadline"],
-        status="Active"
+        status="Pending"
     )
     db.session.add(job)
     db.session.commit()
@@ -362,14 +538,16 @@ def company_job_applications(job_id):
     if job is None:
         return jsonify({"message": "Job not found"}), 404
 
-    applications = Application.query.filter_by(job_id=job.id).all()
+    applications = Application.query.filter_by(
+        job_id=job.id
+    ).all()
+
     data = []
 
     for application in applications:
         student = Student.query.get(application.student_id)
         student_user = User.query.get(student.user_id)
-
-        item = {
+        data.append({
             "application_id": application.id,
             "student_id": student.id,
             "name": student_user.name,
@@ -381,10 +559,11 @@ def company_job_applications(job_id):
             "skills": student.skills,
             "experience": student.experience,
             "resume": student.resume,
-            "status": application.status
-        }
-        data.append(item)
-
+            "status": application.status,
+            "application_date": application.application_date,
+            "interview_date": application.interview_date,
+            "feedback": application.feedback
+        })
     return jsonify(data)
 
 @app.route("/company/application/<int:application_id>", methods=["PUT"])
@@ -403,18 +582,36 @@ def update_application_status(application_id):
         return jsonify({"message": "Application not found"}), 404
 
     job = JobPosition.query.get(application.job_id)
-
     if job.company_id != company.id:
         return jsonify({"message": "Access denied"}), 403
 
     data = request.get_json()
-    application.status = data["status"]
+    status = data.get("status")
+    feedback = data.get("feedback", "")
+    allowed_status = [
+    "Applied",
+    "Shortlisted",
+    "Interview",
+    "Offer",
+    "Rejected",
+    "Selected",
+    "Placed"
+    ]
+
+    if status not in allowed_status:
+        return jsonify({
+            "message": "Invalid application status"
+        }), 400
+
+    application.status = status
+    application.feedback = feedback
     db.session.commit()
 
     return jsonify({
-        "message": "Application status updated"
+        "message": "Application status updated",
+        "status": application.status,
+        "feedback": application.feedback
     })
-
 
 @app.route("/company/application/<int:application_id>/place", methods=["POST"])
 @jwt_required()
@@ -746,7 +943,7 @@ def approve_company(user_id):
         return jsonify({"message":"Company not found"}), 404
     
     user.approved = True
-    user.status = "active"
+    user.active = True
     db.session.commit()
     return jsonify({"message":"Company approved"})
 
@@ -763,9 +960,72 @@ def reject_company(user_id):
         return jsonify({"message":"Company not found"}), 404
 
     user.approved = False
-    user.status = "inactive"
+    user.active = False
     db.session.commit()
     return jsonify({"message":"Company rejected"})
+
+@app.route("/admin/approve-job/<int:job_id>", methods=["PUT"])
+@jwt_required()
+def approve_job(job_id):
+
+    user_id = int(get_jwt_identity())
+
+    admin = User.query.get(user_id)
+
+    if admin.role != "admin":
+        return jsonify({
+            "message":"Access denied"
+        }),403
+
+    job = JobPosition.query.get(job_id)
+
+    if job is None:
+        return jsonify({
+            "message":"Job not found"
+        }),404
+
+    company = Company.query.get(job.company_id)
+    company_user = User.query.get(company.user_id)
+
+    if company_user.approved == False:
+        return jsonify({
+            "message":"Company is not approved"
+        }),400
+
+    job.status = "Active"
+
+    db.session.commit()
+
+    return jsonify({
+        "message":"Job approved"
+    })
+
+
+@app.route("/admin/reject-job/<int:job_id>", methods=["PUT"])
+@jwt_required()
+def reject_job(job_id):
+    user_id = int(get_jwt_identity())
+    admin = User.query.get(user_id)
+
+    if admin.role != "admin":
+        return jsonify({
+            "message":"Access denied"
+        }),403
+
+    job = JobPosition.query.get(job_id)
+
+    if job is None:
+        return jsonify({
+            "message":"Job not found"
+        }),404
+
+    job.status = "Rejected"
+    db.session.commit()
+
+    return jsonify({
+        "message":"Job rejected"
+    })
+
 
 @app.route("/student/dashboard")
 @check_role("student")

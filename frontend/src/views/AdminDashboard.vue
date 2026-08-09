@@ -137,7 +137,22 @@ v-for="job in jobs"
 <td>{{job.title}}</td>
 <td>{{job.experience}}</td>
 <td>{{job.salary}}</td>
-<td>{{job.status}}</td>
+<td>
+
+{{job.status}}
+
+<br>
+<button
+v-if="job.status == 'Pending'"
+class="btn btn-success btn-sm me-1 mt-1"
+@click="approveJob(job.id)">Approve</button>
+
+<button
+v-if="job.status == 'Pending'"
+class="btn btn-danger btn-sm mt-1"
+@click="rejectJob(job.id)">Reject</button>
+
+</td>
 </tr>
 </tbody>
 </table>
@@ -314,6 +329,61 @@ function loadPlacements(){
     .then((res)=>{
         placements.value = res.data
     })
+}
+
+function approveJob(id){
+axios.put(
+"http://127.0.0.1:5000/admin/approve-job/"+id,
+{},
+{
+headers:{
+Authorization:"Bearer "+localStorage.getItem("token")
+}})
+
+.then(res=>{
+
+alert(res.data.message)
+
+loadJobs()
+
+})
+
+.catch(err=>{
+
+if(err.response){
+alert(err.response.data.message)
+}
+
+})
+
+}
+
+
+function rejectJob(id){
+axios.put(
+"http://127.0.0.1:5000/admin/reject-job/"+id,
+{},
+{
+headers:{
+Authorization:"Bearer "+localStorage.getItem("token")
+}})
+
+.then(res=>{
+
+alert(res.data.message)
+
+loadJobs()
+
+})
+
+.catch(err=>{
+
+if(err.response){
+alert(err.response.data.message)
+}
+
+})
+
 }
 
 function approve(id){
