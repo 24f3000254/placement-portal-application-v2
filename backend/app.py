@@ -1,4 +1,5 @@
-from flask import Flask, send_file
+from flask import Flask, send_file, send_from_directory
+import os
 from io import BytesIO
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
@@ -224,6 +225,32 @@ def my_applications():
     return jsonify(data)
 
 
+@app.route("/student/export-applications", methods=["POST"])
+@jwt_required()
+def export_student_applications():
+
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+
+    if user.role != "student":
+        return jsonify({"message": "Access denied"}), 403
+
+    student = Student.query.filter_by(
+        user_id=user.id
+    ).first()
+
+    from celery_app import celery
+
+    task = celery.send_task(
+        "tasks.export_student_csv",
+        args=[student.id]
+    )
+
+    return jsonify({
+        "message": "CSV export started",
+        "task_id": task.id
+    })
+
 @app.route("/student/placements", methods=["GET"])
 @jwt_required()
 def student_placements():
@@ -410,6 +437,76 @@ def upload_resume():
         "message":"Resume uploaded successfully",
         "resume":filename
     })
+
+@app.route("/student/resume/<filename>", methods=["GET"])
+@jwt_required()
+def view_resume(filename):
+
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+
+    if user.role != "student":
+        return jsonify({
+            "message":"Access denied"
+        }),403
+
+    student = Student.query.filter_by(
+        user_id=user.id
+    ).first()
+
+    if student.resume != filename:
+        return jsonify({
+            "message":"Resume not found"
+        }),404
+
+    return send_from_directory(
+        "resumes",
+        filename
+    )
+
+
+@app.route("/company/resume/<filename>", methods=["GET"])
+@jwt_required()
+def company_view_resume(filename):
+
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+
+    if user.role != "company":
+        return jsonify({
+            "message":"Access denied"
+        }),403
+
+    company = Company.query.filter_by(
+        user_id=user.id
+    ).first()
+
+    applications = Application.query.all()
+
+    allowed = False
+
+    for application in applications:
+
+        student = Student.query.get(application.student_id)
+
+        job = JobPosition.query.get(application.job_id)
+
+        if student and job:
+            if student.resume == filename and job.company_id == company.id:
+                allowed = True
+                break
+
+    if not allowed:
+        return jsonify({
+            "message":"Resume not found"
+        }),404
+
+    return send_from_directory(
+        "resumes",
+        filename
+    )
+
+
 
 
 @app.route("/company/register",methods=["POST"])
@@ -723,6 +820,36 @@ def schedule_interview(application_id):
 
     return jsonify({
         "message": "Interview scheduled successfully"
+    })
+
+
+@app.route("/company/export-applications", methods=["POST"])
+@jwt_required()
+def export_company_applications():
+
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+
+    if user.role != "company":
+        return jsonify({"message": "Access denied"}), 403
+
+    company = Company.query.filter_by(
+        user_id=user.id
+    ).first()
+
+    if company is None:
+        return jsonify({"message": "Company not found"}), 404
+
+    from celery_app import celery
+
+    task = celery.send_task(
+        "tasks.export_company_csv",
+        args=[company.id]
+    )
+
+    return jsonify({
+        "message": "CSV export started",
+        "task_id": task.id
     })
 
 @app.route("/company/dashboard", methods=["GET"])
@@ -1061,6 +1188,60 @@ def logout():
         "message":"Logout Successful"
     })
 
+@app.route("/export-status/<task_id>", methods=["GET"])
+@jwt_required()
+def export_status(task_id):
+
+    from celery_app import celery
+
+    task = celery.AsyncResult(task_id)
+
+    if task.state == "SUCCESS":
+
+        return jsonify({
+            "status": "SUCCESS",
+            "message": "CSV export completed"
+        })
+
+    if task.state == "FAILURE":
+
+        return jsonify({
+            "status": "FAILURE",
+            "message": "CSV export failed"
+        })
+
+    return jsonify({
+        "status": "PENDING",
+        "message": "CSV export is still running"
+    })
+
+
+@app.route("/export-download/<task_id>", methods=["GET"])
+@jwt_required()
+def download_export(task_id):
+
+    from celery_app import celery
+
+    task = celery.AsyncResult(task_id)
+
+    if task.state != "SUCCESS":
+        return jsonify({
+            "message": "Export is not ready yet"
+        }), 400
+
+    file_name = task.result
+
+    if not os.path.exists(file_name):
+        return jsonify({
+            "message": "Export file not found"
+        }), 404
+
+    return send_file(
+        file_name,
+        as_attachment=True,
+        download_name="placement_export.csv",
+        mimetype="text/csv"
+    )
 
 
 if __name__ == "__main__":
