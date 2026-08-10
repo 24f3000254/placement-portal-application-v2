@@ -1,9 +1,41 @@
+# Python
 __pycache__/
 *.pyc
+*.pyo
+
+# Virtual environment
 venv/
+env/
+.venv/
+
+# Database
 *.db
 *.sqlite3
-.env
+backend/instance/
+
+# Celery
+backend/celerybeat-schedule*
+
+# Node
 node_modules/
 dist/
+dist-ssr/
+
+# Generated files
+backend/exports/
+backend/reports/
+
+# Uploaded files
+backend/resumes/*
+backend/static/resumes/*
+
+# Environment
+.env
+
+# Logs
+*.log
+
+# Editor
 .vscode/
+.idea/
+.DS_Store

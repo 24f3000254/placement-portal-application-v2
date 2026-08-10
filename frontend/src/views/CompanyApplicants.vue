@@ -3,6 +3,12 @@
 <div class="container mt-4">
     <h2>Applicants</h2>
 
+    <button
+    class="btn btn-success mb-3"
+    @click="exportApplications">
+    Export Applicants CSV
+    </button>
+
     <table class="table table-bordered">
         <thead>
             <tr>
@@ -11,6 +17,8 @@
                 <th>Branch</th>
                 <th>CGPA</th>
                 <th>Skills</th>
+                <th>Skills</th>
+                <th>Resume</th>
                 <th>Status</th>
                 <th>Placement</th>
                 <th>Action</th>
@@ -26,7 +34,15 @@
                 <td>{{ student.branch }}</td>
                 <td>{{ student.cgpa }}</td>
                 <td>{{ student.skills }}</td>
+                <td>
+                    <button
+                    v-if="student.resume"
+                    class="btn btn-info btn-sm"
+                    @click="viewResume(student.resume)">
+                    View Resume
+                    </button>
 
+                    <span v-else>No Resume</span></td>
                 <td>{{ student.status }}</td>
 <td>
 
@@ -140,39 +156,54 @@ function scheduleInterview(id,date){
             headers:{
                 Authorization:"Bearer "+localStorage.getItem("token")}}
     )
-
     .then(()=>{
         alert("Interview Scheduled")
         loadApplicants()
     })
 }
 
+
+function viewResume(filename){
+    axios.get(
+        "http://127.0.0.1:5000/company/resume/"+filename,
+        {
+            responseType:"blob",
+            headers:{
+                Authorization:"Bearer "+localStorage.getItem("token")
+            }
+        }
+    )
+    .then((res)=>{
+        let url = window.URL.createObjectURL(
+            new Blob([res.data], {type:"application/pdf"})
+        )
+        window.open(url, "_blank")
+    })
+    .catch((err)=>{
+
+        alert("Unable to open resume")
+    })
+}
+
 function placeStudent(student){
-
     if(student.salary == "" || student.joining_date == ""){
-
         alert("Enter salary and joining date")
         return
-
     }
 
     axios.post(
 
         "http://127.0.0.1:5000/company/application/"+student.application_id+"/place",
-
         {
             salary:student.salary,
             joining_date:student.joining_date
         },
-
         {
             headers:{
                 Authorization:"Bearer "+localStorage.getItem("token")
             }
         }
-
     )
-
     .then(()=>{
 
         alert("Student Placed")
@@ -187,6 +218,78 @@ function placeStudent(student){
 
     })
 
+}
+
+function exportApplications(){
+axios.post(
+    "http://127.0.0.1:5000/company/export-applications",
+    {},
+    {
+        headers:{
+            Authorization:"Bearer "+localStorage.getItem("token")
+        }
+    }
+)
+
+.then(res=>{
+    alert("CSV export started")
+    checkExport(res.data.task_id)
+})
+.catch(err=>{
+    if(err.response){
+        alert(err.response.data.message)
+    }
+})
+
+}
+
+
+function checkExport(taskId){
+
+    let timer = setInterval(()=>{
+        axios.get(
+            "http://127.0.0.1:5000/export-status/"+taskId,
+            {
+                headers:{
+                    Authorization:"Bearer "+localStorage.getItem("token")
+                }
+            }
+        )
+
+        .then(res=>{
+            if(res.data.status == "SUCCESS"){
+                clearInterval(timer)
+                alert("CSV export completed")
+                axios.get(
+                    "http://127.0.0.1:5000/export-download/"+taskId,
+                    {
+                        responseType:"blob",
+                        headers:{
+                            Authorization:"Bearer "+localStorage.getItem("token")
+                        }
+                    }
+                )
+                .then(file=>{
+                    let url = window.URL.createObjectURL(
+                        new Blob([file.data])
+                    )
+                    let link = document.createElement("a")
+                    link.href = url
+                    link.setAttribute(
+                        "download",
+                        "company_applications.csv"
+                    )
+                    document.body.appendChild(link)
+                    link.click()
+                    link.remove()
+                })
+            }
+            if(res.data.status == "FAILURE"){
+                clearInterval(timer)
+                alert("CSV export failed")
+            }
+        })
+    },2000)
 }
 
 onMounted(()=>{

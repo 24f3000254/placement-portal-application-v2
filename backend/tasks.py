@@ -23,20 +23,26 @@ def interview_reminder():
             try:
                 interview_time = datetime.strptime(
                     application.interview_date,
-                    "%Y-%m-%dT%H:%M"
+                    "%Y-%m-%d"
                 )
             except:
                 try:
                     interview_time = datetime.strptime(
                         application.interview_date,
-                        "%Y-%m-%d %H:%M"
+                        "%Y-%m-%dT%H:%M"
                     )
                 except:
-                    continue
+                    try:
+                        interview_time = datetime.strptime(
+                            application.interview_date,
+                            "%Y-%m-%d %H:%M"
+                        )
+                    except:
+                        continue
 
             now = datetime.now()
 
-            if now <= interview_time <= now + timedelta(hours=24):
+            if now.date() <= interview_time.date() <= (now + timedelta(hours=24)).date():
 
                 student = Student.query.get(application.student_id)
 
@@ -50,7 +56,7 @@ def interview_reminder():
                         application.interview_date
                     )
 
-        return "Interview reminder task completed"
+    return "Interview reminder task completed"
 
 
 @celery.task

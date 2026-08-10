@@ -3,3 +3,5 @@ Flask-SQLAlchemy
 Flask-Cors
 Flask-JWT-Extended
 Werkzeug
+celery
+redis

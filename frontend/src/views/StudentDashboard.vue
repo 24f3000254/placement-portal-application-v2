@@ -77,6 +77,9 @@ Upload Resume
 
 <p v-if="profile.resume" class="mt-2">
 Current Resume: {{ profile.resume }}
+<button
+    class="btn btn-primary btn-sm ms-2"
+    @click="viewResume">View Resume</button>
 </p>
 
 </div>
@@ -158,6 +161,12 @@ class="badge bg-primary">
 <hr>
 
 <h4>My Applications</h4>
+
+<button
+class="btn btn-success mb-3"
+@click="exportApplications">
+Export Applications CSV
+</button>
 
 <table class="table table-bordered">
 
@@ -280,6 +289,88 @@ resume:""
 
 const resumeFile=ref(null)
 
+function exportApplications(){
+
+axios.post(
+    "http://127.0.0.1:5000/student/export-applications",
+    {},
+    {
+        headers:{
+            Authorization:"Bearer "+localStorage.getItem("token")
+        }
+    }
+)
+
+.then(res=>{
+
+    alert("CSV export started")
+
+    checkExport(res.data.task_id)
+
+})
+
+.catch(err=>{
+
+    if(err.response){
+        alert(err.response.data.message)
+    }
+
+})
+
+}
+
+
+function checkExport(taskId){
+    let timer = setInterval(()=>{
+        axios.get(
+            "http://127.0.0.1:5000/export-status/"+taskId,
+            {
+                headers:{
+                    Authorization:"Bearer "+localStorage.getItem("token")
+                }
+            }
+        )
+        .then(res=>{
+            if(res.data.status == "SUCCESS"){
+                clearInterval(timer)
+                alert("CSV export completed")
+                axios.get(
+                    "http://127.0.0.1:5000/export-download/"+taskId,
+                    {
+                        responseType:"blob",
+                        headers:{
+                            Authorization:"Bearer "+localStorage.getItem("token")
+                        }
+                    }
+                )
+                .then(file=>{
+                    let url = window.URL.createObjectURL(
+                        new Blob([file.data])
+                    )
+
+                    let link = document.createElement("a")
+                    link.href = url
+                    link.setAttribute(
+                        "download",
+                        "student_applications.csv"
+                    )
+
+                    document.body.appendChild(link)
+                    link.click()
+                    link.remove()
+
+                })
+            }
+            if(res.data.status == "FAILURE"){
+
+                clearInterval(timer)
+
+                alert("CSV export failed")
+            }
+        })
+    },2000)
+}
+
 
 function loadProfile(){
 
@@ -329,6 +420,30 @@ function selectResume(event){
     }
 }
 
+
+function viewResume(){
+    axios.get(
+        "http://127.0.0.1:5000/student/resume/" + profile.value.resume,
+        {
+            headers:{
+                Authorization:"Bearer " + localStorage.getItem("token")
+            },
+            responseType:"blob"
+        }
+    )
+    .then(res=>{
+        const file = new Blob(
+            [res.data],
+            {type:"application/pdf"}
+        )
+        const url = URL.createObjectURL(file)
+        window.open(url, "_blank")
+    })
+    .catch(err=>{
+        console.log("RESUME ERROR:", err)
+        alert("Unable to open resume")
+    })
+}
 
 function uploadResume(){
 
